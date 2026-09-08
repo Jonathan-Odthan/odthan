@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@odthan/ui": ["packages/ui/src/index.ts"],
+      "@odthan/ui/*": ["packages/ui/src/*"],
+      "@odthan/database": ["packages/database/src/index.ts"],
+      "@odthan/database/*": ["packages/database/src/*"],
+      "@odthan/validation": ["packages/validation/src/index.ts"],
+      "@odthan/validation/*": ["packages/validation/src/*"],
+      "@odthan/config": ["packages/config/src/index.ts"],
+      "@odthan/config/*": ["packages/config/src/*"]
+    }
+  },
+  "exclude": ["node_modules", ".next", "dist", "build"]
+}

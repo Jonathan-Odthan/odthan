@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: odthan
+      POSTGRES_PASSWORD: odthan_dev_password
+      POSTGRES_DB: odthan
+    ports:
+      - "5432:5432"
+    volumes:
+      - odthan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odthan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: web
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  business:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: business
+    ports:
+      - "3001:3001"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  auto:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: auto
+    ports:
+      - "3002:3002"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  investir:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: investir
+    ports:
+      - "3003:3003"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: admin
+    ports:
+      - "3004:3004"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  account:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: account
+    ports:
+      - "3005:3005"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  odthan_pgdata:
