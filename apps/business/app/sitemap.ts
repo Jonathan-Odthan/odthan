@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@odthan/database";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = "https://business.odthan.com";
   const staticRoutes = ["", "/creer-mon-entreprise", "/services", "/tarifs", "/comment-ca-marche", "/faq", "/contact"];
