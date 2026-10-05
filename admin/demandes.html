@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demandes</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+<style>
+  .drawer{position:fixed;top:0;right:-460px;width:440px;max-width:92vw;height:100vh;background:#fff;box-shadow:-8px 0 24px rgba(0,0,0,.12);transition:right .2s var(--ease);z-index:300;overflow-y:auto;padding:24px}
+  .drawer.open{right:0}
+  .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:290;display:none}
+  .drawer-overlay.open{display:block}
+  .drawer .close{position:absolute;top:20px;right:20px;background:none;border:none;font-size:1.3rem;cursor:pointer}
+  .timeline{border-left:2px solid #eee;padding-left:14px;margin-left:4px}
+  .timeline .item{margin-bottom:14px}
+</style>
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head">
+    <div><h1>Demandes</h1><p id="count-label"></p></div>
+    <button class="btn btn-primary" id="btn-new" hidden>+ Nouvelle demande</button>
+  </div>
+  <div style="margin-bottom:16px">
+    <select id="status-filter" style="padding:9px;border:1px solid #ddd;border-radius:8px">
+      <option value="">Tous les statuts</option>
+      <option>NEW</option><option>REVIEWING</option><option>APPROVED</option><option>IN_PROGRESS</option>
+      <option>WAITING_CLIENT</option><option>COMPLETED</option><option>CANCELLED</option>
+    </select>
+  </div>
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Numéro</th><th>Client</th><th>Service</th><th>Priorité</th><th>Statut</th><th>Date</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</template>
+
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<div class="drawer" id="drawer"><button class="close" id="drawer-close">✕</button><div id="drawer-content"></div></div>
+
+<script src="js/app.js"></script>
+<script>
+let admin, lookups;
+const STATUSES = ["NEW","REVIEWING","APPROVED","IN_PROGRESS","WAITING_CLIENT","COMPLETED","CANCELLED"];
+const STATUS_COLOR = { NEW: "blue", REVIEWING: "amber", APPROVED: "green", IN_PROGRESS: "amber", WAITING_CLIENT: "", COMPLETED: "green", CANCELLED: "red" };
+
+function openDrawer() { document.getElementById("drawer").classList.add("open"); document.getElementById("drawer-overlay").classList.add("open"); }
+function closeDrawer() { document.getElementById("drawer").classList.remove("open"); document.getElementById("drawer-overlay").classList.remove("open"); }
+
+async function load() {
+  const status = document.getElementById("status-filter").value;
+  const { data } = await adminApi("/api/admin/requests" + (status ? "?status=" + status : ""));
+  if (!data) return;
+  document.getElementById("count-label").textContent = `${data.requests.length} demande(s)`;
+  document.getElementById("rows").innerHTML = data.requests.length === 0
+    ? `<tr><td colspan="6"><div class="empty">Aucune demande trouvée.</div></td></tr>`
+    : data.requests.map((r) => `
+      <tr style="cursor:pointer" onclick="openRequest('${r.id}')">
+        <td><strong>${r.number}</strong></td>
+        <td>${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</td>
+        <td>${escapeHtml(r.service_name || "-")}</td>
+        <td><span class="badge">${r.priority}</span></td>
+        <td><span class="badge ${STATUS_COLOR[r.status] || ""}">${r.status}</span></td>
+        <td>${formatDate(r.created_at)}</td>
+      </tr>`).join("");
+}
+
+async function openRequest(id) {
+  const { data } = await adminApi("/api/admin/requests?id=" + id);
+  if (!data) return;
+  const r = data.request;
+  const canUpdate = hasPerm(admin, "requests.update");
+
+  document.getElementById("drawer-content").innerHTML = `
+    <h2>${r.number}</h2>
+    <p style="color:var(--grey-mid);font-size:.85rem">${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)} — ${escapeHtml(r.service_name || "")}</p>
+    <p style="font-size:.88rem;margin:12px 0">${escapeHtml(r.description || "Aucune description.")}</p>
+    <p style="font-size:.82rem;color:var(--grey-mid)">Responsable : ${r.assignee_first_name ? escapeHtml(r.assignee_first_name) + " " + escapeHtml(r.assignee_last_name) : "Non assigné"}</p>
+    <p style="font-size:.82rem;color:var(--grey-mid)">Source : ${r.source}</p>
+    ${canUpdate ? `
+      <div style="margin:16px 0;padding:14px;background:var(--grey-light);border-radius:8px">
+        <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:6px">Changer le statut</label>
+        <select id="new-status" style="width:100%;margin-bottom:8px">${STATUSES.map(s => `<option ${s===r.status?"selected":""}>${s}</option>`).join("")}</select>
+        <textarea id="status-note" placeholder="Note (optionnel)" rows="2" style="width:100%;margin-bottom:8px"></textarea>
+        <button class="btn btn-primary" id="status-save" style="width:100%">Mettre à jour</button>
+      </div>` : ""}
+    <h3 style="font-size:.88rem">Historique</h3>
+    <div class="timeline">
+      ${data.history.map(h => `<div class="item"><span class="badge ${STATUS_COLOR[h.status]||""}">${h.status}</span><div style="font-size:.78rem;color:var(--grey-mid);margin-top:3px">${formatDate(h.created_at)}</div>${h.note ? `<div style="font-size:.85rem;margin-top:3px">${escapeHtml(h.note)}</div>` : ""}</div>`).join("")}
+    </div>
+  `;
+  openDrawer();
+
+  const saveBtn = document.getElementById("status-save");
+  if (saveBtn) saveBtn.addEventListener("click", async () => {
+    const { res } = await adminApi("/api/admin/requests?id=" + id, {
+      method: "PUT",
+      body: JSON.stringify({ status: document.getElementById("new-status").value, note: document.getElementById("status-note").value }),
+    });
+    if (res.ok) { closeDrawer(); load(); }
+  });
+}
+
+function openNew() {
+  document.getElementById("drawer-content").innerHTML = `
+    <h2>Nouvelle demande</h2>
+    <div class="form-field"><label>Client *</label><select id="f-client">${lookups.clients.map(c => `<option value="${c.id}">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)}</option>`).join("")}</select></div>
+    <div class="form-field"><label>Service *</label><select id="f-service">${lookups.services.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("")}</select></div>
+    <div class="form-field"><label>Description</label><textarea id="f-description" rows="3"></textarea></div>
+    <div class="form-row">
+      <div class="form-field"><label>Priorité</label><select id="f-priority"><option value="LOW">Basse</option><option value="MEDIUM" selected>Moyenne</option><option value="HIGH">Haute</option><option value="URGENT">Urgente</option></select></div>
+      <div class="form-field"><label>Responsable</label><select id="f-assignee"><option value="">Non assigné</option>${lookups.admins.map(a => `<option value="${a.id}">${escapeHtml(a.first_name)} ${escapeHtml(a.last_name)}</option>`).join("")}</select></div>
+    </div>
+    <button class="btn btn-primary" id="save-btn" style="width:100%">Créer la demande</button>
+  `;
+  openDrawer();
+  document.getElementById("save-btn").addEventListener("click", async () => {
+    const { res } = await adminApi("/api/admin/requests", {
+      method: "POST",
+      body: JSON.stringify({
+        clientId: document.getElementById("f-client").value, serviceId: document.getElementById("f-service").value,
+        description: document.getElementById("f-description").value, priority: document.getElementById("f-priority").value,
+        assigneeId: document.getElementById("f-assignee").value,
+      }),
+    });
+    if (res.ok) { closeDrawer(); load(); }
+  });
+}
+
+(async function () {
+  admin = await renderShell("/admin/demandes.html", "Demandes");
+  if (!admin) return;
+  const { data } = await adminApi("/api/admin/lookups");
+  lookups = data;
+  if (hasPerm(admin, "requests.create")) document.getElementById("btn-new").hidden = false;
+  document.getElementById("btn-new").addEventListener("click", openNew);
+  document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+  document.getElementById("drawer-overlay").addEventListener("click", closeDrawer);
+  document.getElementById("status-filter").addEventListener("change", load);
+  await load();
+})();
+</script>
+</body>
+</html>

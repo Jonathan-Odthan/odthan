@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head">
+    <div><h1>Tableau de bord</h1><p>Vue d'ensemble de l'activité Odthan Empire</p></div>
+  </div>
+
+  <div class="grid grid-4" id="stats" style="margin-bottom:20px"></div>
+
+  <div class="grid grid-3" style="align-items:start">
+    <div class="card" style="grid-column:span 2">
+      <h3 style="margin-top:0;font-size:.9rem">Revenus (année en cours)</h3>
+      <div id="chart" style="display:flex;align-items:flex-end;gap:6px;height:160px"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;font-size:.9rem">Services les plus demandés</h3>
+      <div id="top-services"></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card">
+      <h3 style="margin-top:0;font-size:.9rem">Dernières commandes</h3>
+      <div id="recent-orders"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;font-size:.9rem">Dernières demandes</h3>
+      <div id="recent-requests"></div>
+    </div>
+  </div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+(async function () {
+  const admin = await renderShell("/admin/dashboard.html", "Dashboard");
+  if (!admin) return;
+
+  const { res, data } = await adminApi("/api/admin/dashboard");
+  if (!res.ok) return;
+
+  document.getElementById("stats").innerHTML = [
+    ["👥", "Clients totaux", data.totalClients],
+    ["➕", "Nouveaux clients (mois)", data.newClients],
+    ["📥", "Demandes en attente", data.pendingRequests],
+    ["📦", "Commandes en cours", data.ordersInProgress],
+    ["✅", "Commandes terminées", data.ordersCompleted],
+    ["💰", "Revenus du jour", formatMoney(data.revenueToday)],
+    ["📈", "Revenus du mois", formatMoney(data.revenueMonth)],
+    ["⚠️", "Solde en attente", formatMoney(data.pendingBalance)],
+  ].map(([icon, label, value]) => `
+    <div class="card stat">
+      <div class="icon">${icon}</div>
+      <div><div class="label">${label}</div><div class="value">${value}</div></div>
+    </div>`).join("");
+
+  const months = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+  const max = Math.max(1, ...data.revenueByMonth);
+  document.getElementById("chart").innerHTML = data.revenueByMonth.map((v, i) => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="width:100%;background:var(--red);border-radius:3px 3px 0 0;height:${Math.max(2, (v / max) * 120)}px" title="${formatMoney(v)}"></div>
+      <span style="font-size:.65rem;color:var(--grey-mid)">${months[i]}</span>
+    </div>`).join("");
+
+  document.getElementById("top-services").innerHTML = data.topServices.filter(s => s.total > 0).length === 0
+    ? '<p class="empty">Aucune demande pour le moment.</p>'
+    : data.topServices.map((s) => `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:.88rem"><span>${escapeHtml(s.name)}</span><strong>${s.total}</strong></div>`).join("");
+
+  document.getElementById("recent-orders").innerHTML = data.recentOrders.length === 0
+    ? '<p class="empty">Aucune commande.</p>'
+    : data.recentOrders.map((o) => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F1F1F1;font-size:.88rem">
+        <span>${o.number}<br><small style="color:var(--grey-mid)">${escapeHtml(o.first_name)} ${escapeHtml(o.last_name)}</small></span>
+        <span class="badge blue">${o.status}</span>
+      </div>`).join("");
+
+  document.getElementById("recent-requests").innerHTML = data.recentRequests.length === 0
+    ? '<p class="empty">Aucune demande.</p>'
+    : data.recentRequests.map((r) => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F1F1F1;font-size:.88rem">
+        <span>${r.number}<br><small style="color:var(--grey-mid)">${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)} — ${escapeHtml(r.service_name || "")}</small></span>
+        <span class="badge amber">${r.status}</span>
+      </div>`).join("");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rôles & Permissions</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+<style>
+  .perm-module{margin-bottom:14px}
+  .perm-module .title{font-size:.7rem;font-weight:800;text-transform:uppercase;color:var(--grey-mid);margin-bottom:6px}
+  .perm-check{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;margin-right:16px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head"><div><h1>Rôles & Permissions</h1><p>SUPER_ADMIN a toujours un accès complet, non modifiable ici.</p></div></div>
+  <div id="roles-list" style="display:flex;flex-direction:column;gap:16px"></div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+let admin, state;
+
+function render() {
+  document.getElementById("roles-list").innerHTML = state.roles.map((role) => {
+    const isSuper = role.name === "SUPER_ADMIN";
+    const activeIds = new Set(state.permsByRole[role.id] || []);
+    const byModule = {};
+    state.permissions.forEach((p) => { (byModule[p.module] ||= []).push(p); });
+
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h2 style="font-size:1rem;margin:0">${escapeHtml(role.label)}</h2>
+          ${isSuper ? '<span class="badge red">Accès complet (implicite)</span>' : ""}
+        </div>
+        ${isSuper ? '<p style="color:var(--grey-mid);font-size:.85rem">Ce rôle a accès à tous les modules et actions par définition.</p>' : `
+          <form data-role-id="${role.id}">
+            ${Object.entries(byModule).map(([mod, perms]) => `
+              <div class="perm-module">
+                <div class="title">${mod}</div>
+                ${perms.map(p => `<label class="perm-check"><input type="checkbox" value="${p.id}" ${activeIds.has(p.id)?"checked":""} ${hasPerm(admin,"roles.update")?"":"disabled"}> ${escapeHtml(p.label)}</label>`).join("")}
+              </div>`).join("")}
+            ${hasPerm(admin,"roles.update") ? '<button class="btn btn-primary" type="submit">Enregistrer les permissions</button>' : ""}
+          </form>`}
+      </div>`;
+  }).join("");
+
+  document.querySelectorAll("form[data-role-id]").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const roleId = form.dataset.roleId;
+      const permissionIds = Array.from(form.querySelectorAll("input[type=checkbox]:checked")).map(i => i.value);
+      const { res } = await adminApi("/api/admin/roles?id=" + roleId, { method: "PUT", body: JSON.stringify({ permissionIds }) });
+      if (res.ok) load();
+    });
+  });
+}
+
+async function load() {
+  const { data } = await adminApi("/api/admin/roles");
+  if (!data) return;
+  state = data;
+  render();
+}
+
+(async function () {
+  admin = await renderShell("/admin/roles.html", "Rôles & Permissions");
+  if (!admin) return;
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tâches</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+<style>
+  .drawer{position:fixed;top:0;right:-420px;width:400px;max-width:92vw;height:100vh;background:#fff;box-shadow:-8px 0 24px rgba(0,0,0,.12);transition:right .2s var(--ease);z-index:300;overflow-y:auto;padding:24px}
+  .drawer.open{right:0}
+  .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:290;display:none}
+  .drawer-overlay.open{display:block}
+  .drawer .close{position:absolute;top:20px;right:20px;background:none;border:none;font-size:1.3rem;cursor:pointer}
+</style>
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head">
+    <div><h1>Tâches</h1><p id="count-label"></p></div>
+    <button class="btn btn-primary" id="btn-new" hidden>+ Nouvelle tâche</button>
+  </div>
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table>
+      <thead><tr><th>Titre</th><th>Responsable</th><th>Priorité</th><th>Échéance</th><th>Statut</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</template>
+
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<div class="drawer" id="drawer"><button class="close" id="drawer-close">✕</button><div id="drawer-content"></div></div>
+
+<script src="js/app.js"></script>
+<script>
+let admin, lookups;
+const STATUSES = ["TODO","IN_PROGRESS","COMPLETED","CANCELLED"];
+
+async function load() {
+  const { data } = await adminApi("/api/admin/tasks");
+  if (!data) return;
+  const canUpdate = hasPerm(admin, "tasks.update");
+  document.getElementById("count-label").textContent = `${data.tasks.length} tâche(s)`;
+  document.getElementById("rows").innerHTML = data.tasks.length === 0
+    ? `<tr><td colspan="5"><div class="empty">Aucune tâche trouvée.</div></td></tr>`
+    : data.tasks.map((t) => `
+      <tr>
+        <td><strong>${escapeHtml(t.title)}</strong></td>
+        <td>${t.assignee_first_name ? escapeHtml(t.assignee_first_name)+" "+escapeHtml(t.assignee_last_name) : "Non assigné"}</td>
+        <td><span class="badge ${t.priority==="URGENT"?"red":t.priority==="HIGH"?"amber":""}">${t.priority}</span></td>
+        <td>${t.due_date ? formatDate(t.due_date) : "-"}</td>
+        <td>${canUpdate ? `<select onchange="updateStatus('${t.id}', this.value)" style="padding:4px 8px;font-size:.78rem">${STATUSES.map(s => `<option ${s===t.status?"selected":""}>${s}</option>`).join("")}</select>` : `<span class="badge">${t.status}</span>`}</td>
+      </tr>`).join("");
+}
+
+async function updateStatus(id, status) {
+  await adminApi("/api/admin/tasks?id=" + id, { method: "PUT", body: JSON.stringify({ status }) });
+  load();
+}
+
+function openDrawer() { document.getElementById("drawer").classList.add("open"); document.getElementById("drawer-overlay").classList.add("open"); }
+function closeDrawer() { document.getElementById("drawer").classList.remove("open"); document.getElementById("drawer-overlay").classList.remove("open"); }
+
+function openNew() {
+  document.getElementById("drawer-content").innerHTML = `
+    <h2>Nouvelle tâche</h2>
+    <div class="form-field"><label>Titre *</label><input id="f-title" required></div>
+    <div class="form-field"><label>Description</label><textarea id="f-description" rows="3"></textarea></div>
+    <div class="form-row">
+      <div class="form-field"><label>Priorité</label><select id="f-priority"><option value="LOW">Basse</option><option value="MEDIUM" selected>Moyenne</option><option value="HIGH">Haute</option><option value="URGENT">Urgente</option></select></div>
+      <div class="form-field"><label>Responsable</label><select id="f-assignee"><option value="">Non assigné</option>${lookups.admins.map(a => `<option value="${a.id}">${escapeHtml(a.first_name)} ${escapeHtml(a.last_name)}</option>`).join("")}</select></div>
+    </div>
+    <div class="form-field"><label>Date limite</label><input id="f-due" type="date"></div>
+    <button class="btn btn-primary" id="save-btn" style="width:100%">Créer la tâche</button>
+  `;
+  openDrawer();
+  document.getElementById("save-btn").addEventListener("click", async () => {
+    const { res } = await adminApi("/api/admin/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        title: document.getElementById("f-title").value, description: document.getElementById("f-description").value,
+        priority: document.getElementById("f-priority").value, assigneeId: document.getElementById("f-assignee").value,
+        dueDate: document.getElementById("f-due").value,
+      }),
+    });
+    if (res.ok) { closeDrawer(); load(); }
+  });
+}
+
+(async function () {
+  admin = await renderShell("/admin/taches.html", "Tâches");
+  if (!admin) return;
+  const { data } = await adminApi("/api/admin/lookups");
+  lookups = data;
+  if (hasPerm(admin, "tasks.create")) document.getElementById("btn-new").hidden = false;
+  document.getElementById("btn-new").addEventListener("click", openNew);
+  document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+  document.getElementById("drawer-overlay").addEventListener("click", closeDrawer);
+  await load();
+})();
+</script>
+</body>
+</html>

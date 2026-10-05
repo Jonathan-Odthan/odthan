@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messages</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+<style>
+  .msg-layout{display:grid;grid-template-columns:280px 1fr;gap:16px;height:calc(100vh - 180px)}
+  @media(max-width:760px){.msg-layout{grid-template-columns:1fr}}
+  .convo-list{overflow-y:auto;border:1px solid #ECECEC;border-radius:10px;background:#fff}
+  .convo-item{padding:12px 14px;border-bottom:1px solid #F1F1F1;cursor:pointer}
+  .convo-item:hover,.convo-item.active{background:var(--grey-light)}
+  .thread{display:flex;flex-direction:column;border:1px solid #ECECEC;border-radius:10px;background:#fff;overflow:hidden}
+  .thread-messages{flex:1;overflow-y:auto;padding:16px}
+  .msg{max-width:75%;padding:8px 12px;border-radius:8px;margin-bottom:8px;font-size:.88rem}
+  .msg.client{background:var(--grey-light)}
+  .msg.admin{margin-left:auto;background:var(--black);color:#fff}
+  .msg small{display:block;opacity:.6;font-size:.7rem;margin-top:4px}
+  .thread-form{display:flex;gap:8px;padding:12px;border-top:1px solid #ECECEC}
+  .thread-form input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:8px}
+</style>
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head"><div><h1>Messages</h1><p>Conversations avec les clients</p></div></div>
+  <div class="msg-layout">
+    <div class="convo-list" id="convo-list"></div>
+    <div class="thread">
+      <div class="thread-messages" id="thread-messages"><div class="empty">Sélectionnez une conversation.</div></div>
+      <form class="thread-form" id="thread-form" hidden><input id="msg-input" placeholder="Écrire un message..." required><button class="btn btn-primary" type="submit">Envoyer</button></form>
+    </div>
+  </div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+let current = null;
+
+async function loadConvos() {
+  const { data } = await adminApi("/api/admin/messages");
+  if (!data) return;
+  document.getElementById("convo-list").innerHTML = data.conversations.length === 0
+    ? '<div class="empty">Aucune conversation.</div>'
+    : data.conversations.map((c) => `
+      <div class="convo-item ${current===c.id?"active":""}" onclick="openConvo('${c.id}')">
+        <div style="display:flex;justify-content:space-between">
+          <strong style="font-size:.88rem">${c.first_name ? escapeHtml(c.first_name)+" "+escapeHtml(c.last_name) : escapeHtml(c.subject||"Conversation")}</strong>
+          ${c.unread > 0 ? `<span class="badge red">${c.unread}</span>` : ""}
+        </div>
+        <p style="margin:3px 0 0;color:var(--grey-mid);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.last_message||"")}</p>
+      </div>`).join("");
+}
+
+async function openConvo(id) {
+  current = id;
+  await loadConvos();
+  const { data } = await adminApi("/api/admin/messages?conversationId=" + id);
+  document.getElementById("thread-form").hidden = false;
+  const box = document.getElementById("thread-messages");
+  box.innerHTML = (data.messages || []).map((m) => `
+    <div class="msg ${m.sender_type}">${escapeHtml(m.body)}<small>${m.sender_type === "admin" ? (escapeHtml(m.admin_first_name||"Équipe")) : "Client"} — ${formatDate(m.created_at)}</small></div>
+  `).join("") || '<div class="empty">Aucun message.</div>';
+  box.scrollTop = box.scrollHeight;
+}
+
+(async function () {
+  const admin = await renderShell("/admin/messages.html", "Messages");
+  if (!admin) return;
+  document.getElementById("thread-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("msg-input");
+    if (!input.value.trim() || !current) return;
+    await adminApi("/api/admin/messages?conversationId=" + current, { method: "POST", body: JSON.stringify({ body: input.value }) });
+    input.value = "";
+    await openConvo(current);
+  });
+  await loadConvos();
+})();
+</script>
+</body>
+</html>

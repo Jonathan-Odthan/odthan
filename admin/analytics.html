@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analytics visiteurs</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head"><div><h1>Analytics visiteurs</h1><p>Pages vues, provenance, pays/ville — sans cookie tiers ni empreinte</p></div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="period-btns"></div>
+  <div class="grid grid-4" id="stats" style="margin-bottom:20px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <h3 style="margin-top:0;font-size:.9rem">Visites par jour</h3>
+    <div id="chart" style="display:flex;align-items:flex-end;gap:4px;height:140px"></div>
+  </div>
+  <div class="grid grid-3">
+    <div class="card"><h3 style="margin-top:0;font-size:.9rem">Pages les plus vues</h3><div id="by-page"></div></div>
+    <div class="card"><h3 style="margin-top:0;font-size:.9rem">Provenance</h3><div id="by-referrer"></div></div>
+    <div class="card"><h3 style="margin-top:0;font-size:.9rem">Pays</h3><div id="by-country"></div></div>
+  </div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+let period = "30d";
+const PERIODS = [["today","Aujourd'hui"],["7d","7 jours"],["30d","30 jours"],["3m","3 mois"],["year","Année"]];
+
+function renderPeriodBtns() {
+  document.getElementById("period-btns").innerHTML = PERIODS.map(([k,l]) => `<button class="btn ${k===period?"btn-primary":"btn-outline"}" onclick="setPeriod('${k}')">${l}</button>`).join("");
+}
+function setPeriod(p) { period = p; renderPeriodBtns(); load(); }
+
+function list(rows, keyField, labelFn) {
+  if (rows.length === 0) return '<p class="empty">Aucune donnée.</p>';
+  return rows.map(r => `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(labelFn(r))}</span><strong>${r.total}</strong></div>`).join("");
+}
+
+async function load() {
+  const { data } = await adminApi("/api/admin/analytics?period=" + period);
+  if (!data) return;
+
+  const bySiteMap = Object.fromEntries(data.bySite.map(s => [s.site, s.total]));
+  document.getElementById("stats").innerHTML = [
+    ["👁️","Pages vues",data.totalViews],
+    ["🧑","Visiteurs uniques",data.uniqueVisitors],
+    ["✅","Dont clients connus",data.knownClients],
+    ["🌐","www / business",`${bySiteMap.www||0} / ${bySiteMap.business||0}`],
+  ].map(([icon,label,value]) => `<div class="card stat"><div class="icon">${icon}</div><div><div class="label">${label}</div><div class="value">${value}</div></div></div>`).join("");
+
+  const max = Math.max(1, ...data.dailyViews.map(d => d.total));
+  document.getElementById("chart").innerHTML = data.dailyViews.map(d => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="width:100%;background:var(--red);border-radius:2px 2px 0 0;height:${Math.max(2,(d.total/max)*110)}px" title="${d.total} vues"></div>
+    </div>`).join("") || '<p class="empty">Aucune donnée.</p>';
+
+  document.getElementById("by-page").innerHTML = list(data.byPage, "path", r => r.path);
+  document.getElementById("by-referrer").innerHTML = list(data.byReferrer, "referrer", r => {
+    try { return r.referrer === "Direct" ? "Direct" : new URL(r.referrer).hostname; } catch { return r.referrer; }
+  });
+  document.getElementById("by-country").innerHTML = list(data.byCountry, "country", r => r.country);
+}
+
+(async function () {
+  const admin = await renderShell("/admin/analytics.html", "Analytics visiteurs");
+  if (!admin) return;
+  renderPeriodBtns();
+  await load();
+})();
+</script>
+</body>
+</html>

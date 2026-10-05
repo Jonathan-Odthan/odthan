@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paramètres</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head"><div><h1>Paramètres</h1><p>Entreprise, profil, notifications, apparence</p></div></div>
+  <div style="max-width:560px;display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <h2 style="font-size:.95rem;margin-top:0">Entreprise</h2>
+      <div class="alert error" id="company-error" hidden></div>
+      <div class="alert success" id="company-success" hidden></div>
+      <div class="form-field"><label>Nom de l'entreprise</label><input id="c-name"></div>
+      <div class="form-row">
+        <div class="form-field"><label>Email</label><input id="c-email" type="email"></div>
+        <div class="form-field"><label>WhatsApp</label><input id="c-whatsapp"></div>
+      </div>
+      <div class="form-field"><label>Site web</label><input id="c-site" type="url"></div>
+      <button class="btn btn-primary" id="save-company" style="width:100%">Enregistrer</button>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:.95rem;margin-top:0">Mon profil</h2>
+      <div class="alert error" id="profile-error" hidden></div>
+      <div class="alert success" id="profile-success" hidden></div>
+      <div class="form-row">
+        <div class="form-field"><label>Prénom</label><input id="p-firstName"></div>
+        <div class="form-field"><label>Nom</label><input id="p-lastName"></div>
+      </div>
+      <div class="form-field"><label>Téléphone</label><input id="p-phone"></div>
+      <button class="btn btn-primary" id="save-profile" style="width:100%">Enregistrer</button>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:.95rem;margin-top:0">Notifications, Apparence, Système</h2>
+      <p style="color:var(--grey-mid);font-size:.85rem;margin:0">Aucune préférence supplémentaire à configurer pour l'instant au-delà de ce qui est déjà actif (centre de notifications, thème clair par défaut).</p>
+    </div>
+  </div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+(async function () {
+  const admin = await renderShell("/admin/settings.html", "Paramètres");
+  if (!admin) return;
+
+  document.getElementById("p-firstName").value = admin.firstName;
+  document.getElementById("p-lastName").value = admin.lastName;
+
+  const { data } = await adminApi("/api/admin/settings");
+  const company = data && data.company ? data.company : { name: "Odthan Empire", email: "odthanempire@gmail.com", whatsapp: "+50955561461", site: "https://www.odthan.com" };
+  document.getElementById("c-name").value = company.name || "";
+  document.getElementById("c-email").value = company.email || "";
+  document.getElementById("c-whatsapp").value = company.whatsapp || "";
+  document.getElementById("c-site").value = company.site || "";
+
+  const canUpdateSettings = hasPerm(admin, "settings.update");
+  if (!canUpdateSettings) {
+    document.querySelectorAll("#c-name,#c-email,#c-whatsapp,#c-site").forEach(el => el.disabled = true);
+    document.getElementById("save-company").hidden = true;
+  }
+
+  document.getElementById("save-company").addEventListener("click", async () => {
+    const { res, data } = await adminApi("/api/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify({ name: document.getElementById("c-name").value, email: document.getElementById("c-email").value, whatsapp: document.getElementById("c-whatsapp").value, site: document.getElementById("c-site").value }),
+    });
+    const successEl = document.getElementById("company-success"), errorEl = document.getElementById("company-error");
+    if (res.ok) { successEl.hidden = false; errorEl.hidden = true; } else { errorEl.textContent = "Vérifiez les champs."; errorEl.hidden = false; successEl.hidden = true; }
+  });
+
+  document.getElementById("save-profile").addEventListener("click", async () => {
+    const { res } = await adminApi("/api/admin/settings?section=profile", {
+      method: "PUT",
+      body: JSON.stringify({ firstName: document.getElementById("p-firstName").value, lastName: document.getElementById("p-lastName").value, phone: document.getElementById("p-phone").value }),
+    });
+    const successEl = document.getElementById("profile-success"), errorEl = document.getElementById("profile-error");
+    if (res.ok) { successEl.hidden = false; errorEl.hidden = true; } else { errorEl.hidden = false; successEl.hidden = true; }
+  });
+})();
+</script>
+</body>
+</html>

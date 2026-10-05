@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<template id="page-content">
+  <div class="page-head">
+    <div><h1>Notifications</h1><p id="count-label"></p></div>
+    <button class="btn btn-outline" id="btn-mark-all">Tout marquer comme lu</button>
+  </div>
+  <div class="card" style="padding:0" id="list"></div>
+</template>
+
+<script src="js/app.js"></script>
+<script>
+async function load() {
+  const { data } = await adminApi("/api/admin/notifications");
+  if (!data) return;
+  document.getElementById("count-label").textContent = `${data.notifications.length} notification(s)`;
+  document.getElementById("list").innerHTML = data.notifications.length === 0
+    ? '<div class="empty">Aucune notification pour le moment.</div>'
+    : data.notifications.map((n) => `
+      <div style="padding:14px 18px;border-bottom:1px solid #F1F1F1;display:flex;justify-content:space-between;gap:12px;${!n.read_at ? "background:#FDEEEE22" : ""}">
+        <div>
+          <p style="margin:0;font-weight:600;font-size:.9rem">${escapeHtml(n.title)}</p>
+          ${n.body ? `<p style="margin:3px 0;color:var(--grey-mid);font-size:.85rem">${escapeHtml(n.body)}</p>` : ""}
+          <p style="margin:0;font-size:.75rem;color:var(--grey-mid)">${formatDate(n.created_at)}</p>
+        </div>
+        ${!n.read_at ? `<button class="btn btn-outline" style="height:fit-content" onclick="markRead('${n.id}')">Marquer comme lu</button>` : ""}
+      </div>`).join("");
+}
+async function markRead(id) { await adminApi("/api/admin/notifications?id=" + id, { method: "PUT" }); load(); }
+
+(async function () {
+  const admin = await renderShell("/admin/notifications.html", "Notifications");
+  if (!admin) return;
+  document.getElementById("btn-mark-all").addEventListener("click", async () => { await adminApi("/api/admin/notifications", { method: "PUT" }); load(); });
+  await load();
+})();
+</script>
+</body>
+</html>
