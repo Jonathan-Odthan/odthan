@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon compte — Odthan</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .db-header{display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid #ECECEC}
+  .db-header img{height:28px}
+  .db-header .who{font-size:.9rem;color:var(--grey-mid)}
+  .db-header button{background:none;border:1px solid #ddd;border-radius:6px;padding:6px 14px;font-size:.85rem;cursor:pointer}
+  .tabs{display:flex;gap:4px;margin:24px 0;border-bottom:1px solid #ECECEC}
+  .tab-btn{padding:10px 16px;border:none;background:none;font-weight:600;font-size:.9rem;color:var(--grey-mid);cursor:pointer;border-bottom:2px solid transparent}
+  .tab-btn.active{color:var(--red);border-bottom-color:var(--red)}
+  .tab-panel{display:none;padding:24px 0}
+  .tab-panel.active{display:block}
+  .card{border:1px solid #ECECEC;border-radius:8px;padding:16px 18px;margin-bottom:12px}
+  .card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .badge{font-size:.72rem;font-weight:700;padding:2px 10px;border-radius:99px;background:#F0F0F0;text-transform:uppercase}
+  .empty{color:var(--grey-mid);font-size:.9rem;padding:24px 0;text-align:center}
+  select,textarea,input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:.9rem;font-family:inherit;margin-bottom:12px}
+  .btn-primary{padding:10px 20px;background:var(--black);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer}
+  .msg{max-width:75%;padding:8px 12px;border-radius:8px;margin-bottom:8px;font-size:.9rem}
+  .msg.client{margin-left:auto;background:var(--black);color:#fff}
+  .msg.admin{background:#F0F0F0}
+  .msg small{display:block;opacity:.6;font-size:.7rem;margin-top:4px}
+  #messages-list{max-height:360px;overflow-y:auto;margin-bottom:12px}
+  .msg-form{display:flex;gap:8px}
+  .msg-form input{margin:0}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="db-header">
+    <a href="https://www.odthan.com/"><img src="/assets/logo-full-trans.png" alt="Odthan"></a>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span class="who" id="who"></span>
+      <button id="logout">Déconnexion</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="requests">Mes demandes</button>
+    <button class="tab-btn" data-tab="new">Commander un service</button>
+    <button class="tab-btn" data-tab="messages">Messages</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-requests">
+    <div id="requests-list"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-new">
+    <form id="new-request-form">
+      <label for="serviceId" style="font-size:.85rem;font-weight:600">Service souhaité</label>
+      <select id="serviceId" name="serviceId" required></select>
+      <label for="description" style="font-size:.85rem;font-weight:600">Décrivez votre besoin</label>
+      <textarea id="description" name="description" rows="4" required></textarea>
+      <button class="btn-primary" type="submit">Envoyer la demande</button>
+      <p id="new-request-success" style="color:#1a7f37;font-size:.88rem;margin-top:10px" hidden>Demande envoyée ! Notre équipe vous répondra bientôt.</p>
+    </form>
+  </div>
+
+  <div class="tab-panel" id="tab-messages">
+    <div id="messages-list"></div>
+    <form class="msg-form" id="message-form">
+      <input type="text" id="message-body" placeholder="Écrire un message..." required>
+      <button class="btn-primary" type="submit">Envoyer</button>
+    </form>
+  </div>
+</div>
+
+<script src="js/client.js"></script>
+<script>
+(async function init() {
+  const { res, data } = await clientApi("/api/client/me");
+  if (!res.ok) { window.location.href = "/compte/login.html"; return; }
+  document.getElementById("who").textContent = data.firstName + " " + data.lastName;
+
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      if (btn.dataset.tab === "messages") loadMessages();
+    });
+  });
+
+  document.getElementById("logout").addEventListener("click", async () => {
+    await clientApi("/api/client/logout", { method: "POST" });
+    window.location.href = "/compte/login.html";
+  });
+
+  await loadRequests();
+  await loadServices();
+
+  document.getElementById("new-request-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const { res, data } = await clientApi("/api/client/requests", {
+      method: "POST",
+      body: JSON.stringify({ serviceId: form.serviceId.value, description: form.description.value }),
+    });
+    if (res.ok) {
+      document.getElementById("new-request-success").hidden = false;
+      form.reset();
+      await loadRequests();
+    }
+  });
+
+  document.getElementById("message-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("message-body");
+    if (!input.value.trim()) return;
+    await clientApi("/api/client/messages", { method: "POST", body: JSON.stringify({ body: input.value }) });
+    input.value = "";
+    await loadMessages();
+  });
+
+  async function loadRequests() {
+    const { data } = await clientApi("/api/client/requests");
+    const list = document.getElementById("requests-list");
+    if (!data || !data.requests || data.requests.length === 0) {
+      list.innerHTML = '<p class="empty">Vous n\'avez pas encore de demande.</p>';
+      return;
+    }
+    list.innerHTML = data.requests.map((r) => `
+      <div class="card">
+        <div class="top">
+          <strong>${r.number} — ${r.service_name || "Service"}</strong>
+          <span class="badge">${r.status}</span>
+        </div>
+        <p style="margin:4px 0;color:#555;font-size:.9rem">${r.description || ""}</p>
+        ${r.order_number ? `<p style="font-size:.85rem;color:var(--grey-mid)">Commande ${r.order_number} — ${formatMoney(r.amount_paid)} / ${formatMoney(r.amount)} payé</p>` : ""}
+        <p style="font-size:.78rem;color:var(--grey-mid)">${formatDate(r.created_at)}</p>
+      </div>
+    `).join("");
+  }
+
+  async function loadServices() {
+    const { data } = await clientApi("/api/client/services");
+    const select = document.getElementById("serviceId");
+    if (data && data.services) {
+      select.innerHTML = data.services.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+    }
+  }
+
+  async function loadMessages() {
+    const { data } = await clientApi("/api/client/messages");
+    const list = document.getElementById("messages-list");
+    if (!data || !data.messages || data.messages.length === 0) {
+      list.innerHTML = '<p class="empty">Aucun message pour le moment.</p>';
+      return;
+    }
+    list.innerHTML = data.messages.map((m) => `
+      <div class="msg ${m.sender_type}">
+        ${m.body}
+        <small>${m.sender_type === "admin" ? (m.admin_first_name || "Équipe Odthan") : "Vous"} — ${formatDate(m.created_at)}</small>
+      </div>
+    `).join("");
+    list.scrollTop = list.scrollHeight;
+  }
+})();
+</script>
+<script src="/js/analytics.js" data-site="business" defer></script>
+</body>
+</html>

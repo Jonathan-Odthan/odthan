@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion — Mon compte Odthan</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .auth-wrap{min-height:80vh;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+  .auth-card{width:100%;max-width:380px}
+  .auth-card img{height:32px;margin-bottom:24px}
+  .auth-card h1{font-family:var(--font-display);font-size:1.5rem;margin:0 0 6px}
+  .auth-card p.sub{color:var(--grey-mid);margin:0 0 24px;font-size:.92rem}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:.85rem;font-weight:600;margin-bottom:6px}
+  .field input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:.95rem}
+  .field input:focus{outline:none;border-color:var(--red)}
+  .btn-primary{width:100%;padding:12px;background:var(--black);color:#fff;border:none;border-radius:6px;font-weight:700;font-size:.95rem;cursor:pointer}
+  .btn-primary:disabled{opacity:.6;cursor:wait}
+  .alert{background:#FDEEEE;color:#B3261E;padding:10px 12px;border-radius:6px;font-size:.88rem;margin-bottom:16px}
+  .switch{text-align:center;margin-top:18px;font-size:.9rem;color:var(--grey-mid)}
+  .switch a{color:var(--red);font-weight:600}
+</style>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <a href="https://www.odthan.com/"><img src="/assets/logo-full-trans.png" alt="Odthan"></a>
+    <h1>Connexion</h1>
+    <p class="sub">Accédez à vos demandes, factures et messages.</p>
+    <p class="alert" id="error" hidden></p>
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+      </div>
+      <button class="btn-primary" type="submit">Se connecter</button>
+    </form>
+    <p class="switch">Pas encore de compte ? <a href="/compte/inscription.html">Créer un compte</a></p>
+  </div>
+</div>
+
+<script src="js/client.js"></script>
+<script>
+  const form = document.getElementById("login-form");
+  const errorEl = document.getElementById("error");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideError(errorEl);
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    const { res, data } = await clientApi("/api/client/login", {
+      method: "POST",
+      body: JSON.stringify({ email: form.email.value, password: form.password.value }),
+    });
+    btn.disabled = false;
+    if (!res.ok) return showError(errorEl, (data && data.message) || "Connexion impossible.");
+    window.location.href = "/compte/tableau-de-bord.html";
+  });
+</script>
+<script src="/js/analytics.js" data-site="business" defer></script>
+</body>
+</html>
